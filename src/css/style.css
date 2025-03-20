@@ -50,3 +50,15 @@ body {
     background-color: #f7f7f7;
     font-weight: bold;
 }
+
+.running-job {
+    border: 2px solid green;
+}
+
+.finished-job {
+    border: 2px solid blue;
+}
+
+.upcoming-job {
+    border: 2px solid orange;
+}

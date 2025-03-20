@@ -33,19 +33,46 @@ window.renderRunningJobs = function (jobs) {
     const container = document.getElementById("runningJobsContainer");
     container.innerHTML = ""; // Clear previous entries
 
-    const runningJobs = jobs.filter((job) => job.jobStatus === "RUNNING");
-
-    runningJobs.forEach((job) => {
-        if (job.jobType === "ANALYTICS_TABLE") {
-            const analyticTableCard = createAnalyticsTableCard(job);
-            container.appendChild(analyticTableCard);
-        } else {
-            const defaultCard = createDefaultCard(job);
-            container.appendChild(defaultCard);
+    // Create a map to hold jobs by their queue name
+    const queueMap = jobs.reduce((map, job) => {
+        const queueName = job.queueName || "independent";
+        if (!map[queueName]) {
+            map[queueName] = [];
         }
+        map[queueName].push(job);
+        return map;
+    }, {});
+
+    Object.keys(queueMap).forEach((queueName) => {
+        // Sort jobs within each queue by their position
+        const queueJobs = queueMap[queueName];
+        queueJobs.sort((a, b) => a.queuePosition - b.queuePosition);
+
+        queueJobs.forEach((job) => {
+            const card = job.jobType === "ANALYTICS_TABLE" 
+                ? createAnalyticsTableCard(job) 
+                : createDefaultCard(job);
+
+            // Add visual indicators based on job status
+            if (job.jobStatus === "RUNNING") {
+                card.classList.add("running-job");
+            } else if (job.jobStatus === "COMPLETED") {
+                card.classList.add("finished-job");
+            } else {
+                card.classList.add("upcoming-job");
+            }
+
+            container.appendChild(card);
+        });
     });
 
+    // If there are no running jobs and no queue jobs displayed
+    if (container.innerHTML === "") {
+        container.innerHTML = "<div class=\"card\"><div class=\"card-title\">No running jobs</div></div>";
+    }
 };
+
+
 
 function createAnalyticsTableCard(job) {
     const titleRegex = /^ANALYTICS_TABLE \(\d+\)$/;
