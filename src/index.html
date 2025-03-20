@@ -11,10 +11,32 @@
     <div id="dhis-header-bar"></div>
 
     <div id="mainView">
-        <p>Content goes here...</p>
-
-        <button onclick="helloWorld()">Hello</button>
+        <div id="runningJobs" class="section">
+            <h4>Running Jobs</h4>
+            <div id="runningJobsContainer" class="cards-container"></div>
+        </div>
+        <div id="allJobs" class="section">
+            <h4>All Jobs</h4>
+            <table id="jobsTable" class="display">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Schedule</th>
+                        <th>Next run</th>
+                        <th>Status</th>
+                        <th>On/off</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
     </div>
+    
+    
+    
+      
 </body>
 
 </html>

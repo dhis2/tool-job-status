@@ -3,6 +3,12 @@
   "description": "Template for basic DHIS2 tools",
   "version": "0.1.0",
   "dependencies": {
+    "chart.js": "^4.4.8",
+    "choices.js": "^11.1.0",
+    "datatables.net": "^2.2.2",
+    "datatables.net-dt": "^2.2.2",
+    "jquery": "^3.7.1",
+    "materialize-css": "^1.0.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
