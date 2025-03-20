@@ -48,65 +48,65 @@ window.renderRunningJobs = function (jobs) {
 };
 
 function createAnalyticsTableCard(job) {
-    const card = document.createElement("div");
+    const titleRegex = /^ANALYTICS_TABLE \(\d+\)$/;
+    const displayName = titleRegex.test(job.displayName) ? "Analytics table (manual run)" : job.displayName;
+    const years = job.jobParameters.years || "All";
+
+    const card = document.createElement("div"); // Declare card
     card.className = "card";
     card.innerHTML = `
-        <div class="card-title">${job.displayName} (Analytics Table)</div>
-        <div>Job Type: ${job.jobType}</div>
+        <div class="card-title">${displayName}</div>
+        <div>ID: ${job.id}</div>
+        <div>Years: ${years}</div>
         ${renderAnalyticsParametersTable(job.jobParameters)}
     `;
     return card;
 }
 
+
 function renderAnalyticsParametersTable(params = {}) {
     const skipTables = Array.isArray(params.skipTableTypes)
         ? params.skipTableTypes
         : typeof params.skipTableTypes === "string"
-        ? params.skipTableTypes.split(",")
-        : [];
+            ? params.skipTableTypes.split(",")
+            : [];
     const skipPrograms = Array.isArray(params.skipPrograms)
         ? params.skipPrograms
         : typeof params.skipPrograms === "string"
-        ? params.skipPrograms.split(",")
-        : [];
+            ? params.skipPrograms.split(",")
+            : [];
 
     const tableElements = [
-        "RESOURCE_TABLES",
-        "DATA_VALUE",
         "COMPLETENESS",
-        "COMPLETENESS_TARGET",
-        "OUTLIER_STATISTICS",
+        "TRACKED_ENTITY_INSTANCE_EVENTS",
+        "OWNERSHIP",
+        "TRACKED_ENTITY_INSTANCE",
+        "DATA_VALUE",
         "EVENT",
         "ENROLLMENT",
-        "TRACKED_ENTITY_INSTANCE",
-        "TRACKED_ENTITY_INSTANCE_EVENTS",
+        "COMPLETENESS_TARGET",
         "TRACKED_ENTITY_INSTANCE_ENROLLMENTS",
-        "OWNERSHIP"        
+        "RESOURCE_TABLES",
+        "OUTLIER_STATISTICS",
     ];
 
-    const tableHTML = `
+    let tableHTML = `
     <table class="parameter-table">
         <thead><tr><th>Element</th><th>Included</th></tr></thead><tbody>
         ${tableElements
-            .map(
-                (element) => `
+        .map(
+            (element) => `
             <tr>
                 <td>${element}</td>
                 <td>${isIncluded(element, skipTables, params)}</td>
             </tr>`
-            )
-            .join("")}
+        )
+        .join("")}
+        <tr><td>Skip Programs</td><td>${skipPrograms.join(", ")}</td></tr>
     </tbody></table>
     `;
 
-    const skipProgramsHTML = `
-    <div>Skip Programs:</div>
-    <ul>
-        ${skipPrograms.map((program) => `<li>${program}</li>`).join("")}
-    </ul>
-    `;
-
-    return tableHTML + skipProgramsHTML;
+    return tableHTML;
 }
 
 function isIncluded(element, skipTables, params) {
@@ -138,9 +138,9 @@ function formatJobParameters(params) {
 
     let formattedParams = "<div>Parameters:</div>";
     formattedParams +=
-        '<table class="parameter-table"><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>';
+        "<table class=\"parameter-table\"><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>";
     for (let key in params) {
-        if (params.hasOwnProperty(key)) {
+        if (Object.prototype.hasOwnProperty.call(params, key)) { // safer check
             formattedParams += `<tr><td>${key}</td><td>${params[key]}</td></tr>`;
         }
     }
@@ -148,6 +148,7 @@ function formatJobParameters(params) {
 
     return formattedParams;
 }
+
 
 window.updateJobsTable = function (jobs) {
     const nonSystemJobs = jobs.filter((job) => !isSystemJob(job));
@@ -182,11 +183,6 @@ window.updateJobsTable = function (jobs) {
             const infoIcon = `<a href="#" class="waves-effect waves-light modal-trigger" data-target="jobInfoModal" onclick="showJobInfo('${JSON.stringify(
                 job.jobParameters || {}
             )}')"><i class="material-icons">info</i></a>`;
-            const rowClass = job.queueName
-                ? "queue-job"
-                : job.jobStatus === "RUNNING"
-                ? "running-job"
-                : "";
 
             rowsData.push([
                 `${queueIndicator} ${job.displayName}`,
@@ -202,8 +198,9 @@ window.updateJobsTable = function (jobs) {
     });
 
     dataTable.clear().rows.add(rowsData).draw(false);
-    
 };
+
+
 
 function initializeDataTable() {
     dataTable = $("#jobsTable").DataTable({
