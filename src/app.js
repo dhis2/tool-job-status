@@ -142,15 +142,17 @@ function getJobStatusClass(status) {
 }
 
 window.updateJobLists = function (jobs) {
-
     jobs = jobs.filter(job => job.jobType !== "HOUSEKEEPING");
 
-    const completedJobs = jobs
+    // Filter out any running jobs
+    const nonRunningJobs = jobs.filter(job => job.jobStatus !== "RUNNING");
+
+    const completedJobs = nonRunningJobs
         .filter(job => job.lastExecutedStatus)
         .sort((a, b) => new Date(b.lastFinished) - new Date(a.lastFinished))
         .slice(0, 6);
 
-    const upcomingJobs = jobs
+    const upcomingJobs = nonRunningJobs
         .filter(job => job.jobStatus === "SCHEDULED" && job.nextExecutionTime)
         .sort((a, b) => new Date(a.nextExecutionTime) - new Date(b.nextExecutionTime))
         .slice(0, 6);
