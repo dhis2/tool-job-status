@@ -71,25 +71,31 @@ window.renderRunningJobs = function(jobs) {
     // 1. Find all queues that have at least one running job
     const activeQueues = new Set(
         jobs
-            .filter(job => job.jobStatus === "RUNNING" && job.jobType !== "HOUSEKEEPING")
-            .map(job => job.queueName || "Independent")
+            .filter(job => job.jobStatus === "RUNNING" && job.jobType !== "HOUSEKEEPING" && job.queueName)
+            .map(job => job.queueName)
     );
 
-    // 2. Group ALL jobs by their queue name if queue has running jobs
+    // 2. Group jobs into queued and independent
     const queueMap = jobs.reduce((map, job) => {
-        const queueName = job.queueName || "Independent";
-        if (activeQueues.has(queueName)) {
-            if (!map[queueName]) {
-                map[queueName] = [];
+        if (job.queueName && activeQueues.has(job.queueName)) {
+            if (!map[job.queueName]) {
+                map[job.queueName] = [];
             }
-            map[queueName].push(job);
+            map[job.queueName].push(job);
         }
         return map;
     }, {});
 
-    let hasActiveQueues = Object.keys(queueMap).length > 0;
+    // Handle independent running jobs separately
+    const independentJobs = jobs.filter(job => 
+        !job.queueName && 
+        job.jobStatus === "RUNNING" && 
+        job.jobType !== "HOUSEKEEPING"
+    );
 
-    // 3. Render all queues
+    let hasActiveJobs = Object.keys(queueMap).length > 0 || independentJobs.length > 0;
+
+    // 3. Render queued jobs
     Object.keys(queueMap).forEach(queueName => {
         const queueJobs = queueMap[queueName];
         const queueContainer = document.createElement("div");
@@ -99,7 +105,7 @@ window.renderRunningJobs = function(jobs) {
         queueJobs.sort((a, b) => a.queuePosition - b.queuePosition);
 
         const queueLabel = document.createElement("h5");
-        queueLabel.textContent = `${queueName}`;
+        queueLabel.textContent = `Queue: ${queueName}`;
         queueContainer.appendChild(queueLabel);
 
         queueJobs.forEach((job, index) => {
@@ -107,7 +113,6 @@ window.renderRunningJobs = function(jobs) {
                 ? createAnalyticsTableCard(job)
                 : createDefaultCard(job);
 
-            // Add status-specific styling
             card.classList.add(getJobStatusClass(job.jobStatus));
 
             const positionLabel = document.createElement("div");
@@ -121,7 +126,28 @@ window.renderRunningJobs = function(jobs) {
         container.appendChild(queueContainer);
     });
 
-    if (!hasActiveQueues) {
+    // 4. Render independent running jobs
+    if (independentJobs.length > 0) {
+        const independentContainer = document.createElement("div");
+        independentContainer.className = "queue-container";
+
+        const independentLabel = document.createElement("h5");
+        independentLabel.textContent = "Now running";
+        independentContainer.appendChild(independentLabel);
+
+        independentJobs.forEach(job => {
+            const card = job.jobType === "ANALYTICS_TABLE"
+                ? createAnalyticsTableCard(job)
+                : createDefaultCard(job);
+
+            card.classList.add(getJobStatusClass(job.jobStatus));
+            independentContainer.appendChild(card);
+        });
+
+        container.appendChild(independentContainer);
+    }
+
+    if (!hasActiveJobs) {
         container.innerHTML = "<div class=\"card\"><div class=\"card-title\">No running jobs</div></div>";
     }
 };
