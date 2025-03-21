@@ -9,36 +9,52 @@ body {
 
 .section {
     margin-bottom: 20px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    justify-content: space-around;
 }
 
 .cards-container,
 .job-list-container {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 20px;
     justify-content: flex-start;
 }
 
+.cards-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    width: 100%; /* Ensure container uses full width */
+}
+
 .job-list-container {
-    flex: 1 1 48%; /* Flexible layout to stack vertically if needed */
+    flex: 1 1 calc(50% - 10px);
+    min-width: 300px;
+    background: transparent; /* Make container background invisible */
 }
 
 .card {
     position: relative;
-    flex: 1 0 220px; /* Base-width with flexibility */
-    min-width: 220px;
-    max-width: 600px;
-    padding: 20px;
-    background-color: white;
+    flex: 1 1 300px; /* Base width with ability to grow and shrink */
+    min-width: 300px;
+    max-width: 450px; /* Reduced max-width to allow more cards per row */
+    margin: 0; /* Remove margin to rely on gap */
+    padding: 15px;
+    background-color: #fff;
     border: 1px solid #e0e0e0;
     border-radius: 8px;
-    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
     display: flex;
     flex-direction: column;
 }
 
 .analytics-card {
-    flex: 1 0 600px;
+    flex: 1 1 450px; /* Adjusted for consistency */
+    min-width: 450px;
+    max-width: 600px;
 }
 
 .card-footer {
@@ -72,6 +88,8 @@ body {
     border-radius: 4px;
     padding: 0 10px;
     align-self: flex-end;
+    text-transform: uppercase;
+    cursor: pointer;
 }
 
 .modal {
@@ -133,50 +151,13 @@ body {
     border: 3px solid orange;
     background-color: #fff3e0;
 }
-.small-btn {
-    margin-top: 5px;
-    background-color: #009688;
-    color: #fff;
-    border-radius: 4px;
-    padding: 0 10px;
-    align-self: flex-end;
-    text-transform: uppercase;
-    cursor: pointer;
-}
-
-.section {
-    margin-bottom: 20px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 20px;
-    justify-content: space-around;
-}
 
 .job-list-card {
     flex: 1 1 48%; /* Flex settings to adjust based on screen width */
-    background-color: #fafafa;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.1);
-    padding: 15px;
-    margin: 10px 0;
-    display: flex;
-    flex-direction: column;
-}
-
-.job-list {
-    list-style-type: none;
-    padding: 0;
-    margin: 0;
-}
-
-.job-list li {
-    background: #fff;
-    border: 1px solid #e0e0e0;
-    border-radius: 5px;
-    margin-bottom: 10px;
-    padding: 10px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 15px 0;
 }
 
 h4 {
@@ -185,36 +166,21 @@ h4 {
     padding-bottom: 5px;
 }
 
-.small-btn {
-    margin-top: 5px;
-    background-color: #009688;
-    color: #fff;
-    border-radius: 4px;
-    padding: 0 10px;
-    align-self: flex-end;
-    text-transform: uppercase;
-    cursor: pointer;
-}
-
-.modal {
-    max-width: 80%;
-}
-
-.modal-content h4 {
-    margin-bottom: 20px;
-}
-
-.modal-footer .btn {
-    background-color: #f44336;
-    color: #fff;
-}
-
 .queue-container {
-    border: 1px solid #ddd;
+    width: 100%;
+    border: 1px solid #eee;
     border-radius: 8px;
     margin-bottom: 20px;
-    padding: 10px;
-    background-color: #f5f5f5;
+    padding: 15px;
+    background-color: rgba(245, 245, 245, 0.5); /* More subtle background */
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.queue-container h5 {
+    width: 100%; /* Make the queue title take full width */
+    margin-bottom: 15px;
 }
 
 .position-label {
@@ -226,15 +192,6 @@ h4 {
     border-radius: 4px;
     font-size: 12px;
     font-weight: bold;
-}
-
-.card {
-    position: relative; /* Enable positioning within the card */
-    margin: 10px 0;
-    padding: 15px;
-    background-color: #fff;
-    border-radius: 8px;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
 .queue-label {
@@ -246,42 +203,26 @@ h5 {
     margin: 0;
 }
 
-
-.running-job {
-    border: 3px solid green;
-    background-color: #e0f7fa;
+.job-running {
+    border-left: 4px solid #2196F3;  /* Blue */
 }
 
-.completed-job {
-    border: 3px solid blue;
-    background-color: #e3f2fd;
+.job-completed {
+    border-left: 4px solid #4CAF50;  /* Green */
+    opacity: 0.8;
 }
 
-.queue-container {
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    margin-bottom: 20px;
-    padding: 10px;
-    background-color: #f5f5f5;
+.job-failed {
+    border-left: 4px solid #F44336;  /* Red */
+    opacity: 0.8;
 }
 
-.position-label {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    background-color: #e0e0e0;
-    padding: 5px;
-    border-radius: 4px;
-    font-size: 12px;
-    font-weight: bold;
+.job-scheduled {
+    border-left: 4px solid #FFC107;  /* Amber */
+    opacity: 0.8;
 }
 
-.card {
-    position: relative;
-    margin: 10px 0;
-    padding: 15px;
-    background-color: #fff;
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+.job-unknown {
+    border-left: 4px solid #9E9E9E;  /* Grey */
+    opacity: 0.8;
 }

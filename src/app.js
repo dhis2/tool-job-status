@@ -64,14 +64,21 @@ function startModalPolling(jobType, jobId) {
 }
 
 
-window.renderRunningJobs = function (jobs) {
+window.renderRunningJobs = function(jobs) {
     const container = document.getElementById("runningJobsContainer");
     container.innerHTML = ""; // Clear previous entries
 
-    // Construct a map of running jobs by queue name
+    // 1. Find all queues that have at least one running job
+    const activeQueues = new Set(
+        jobs
+            .filter(job => job.jobStatus === "RUNNING" && job.jobType !== "HOUSEKEEPING")
+            .map(job => job.queueName || "Independent")
+    );
+
+    // 2. Group ALL jobs by their queue name if queue has running jobs
     const queueMap = jobs.reduce((map, job) => {
-        if (job.jobStatus === "RUNNING" && job.jobType !== "HOUSEKEEPING") {
-            const queueName = job.queueName || "Independent"; // Default to 'Independent' for unqueued jobs
+        const queueName = job.queueName || "Independent";
+        if (activeQueues.has(queueName)) {
             if (!map[queueName]) {
                 map[queueName] = [];
             }
@@ -80,31 +87,32 @@ window.renderRunningJobs = function (jobs) {
         return map;
     }, {});
 
-    let hasRunningJobs = false;
+    let hasActiveQueues = Object.keys(queueMap).length > 0;
 
-    Object.keys(queueMap).forEach((queueName) => {
+    // 3. Render all queues
+    Object.keys(queueMap).forEach(queueName => {
         const queueJobs = queueMap[queueName];
-        hasRunningJobs = hasRunningJobs || queueJobs.length > 0;
-
-        // Sort the jobs within each queue by 'queuePosition'
-        queueJobs.sort((a, b) => a.queuePosition - b.queuePosition);
-
         const queueContainer = document.createElement("div");
         queueContainer.className = "queue-container";
+
+        // Sort jobs within each queue by queuePosition
+        queueJobs.sort((a, b) => a.queuePosition - b.queuePosition);
+
         const queueLabel = document.createElement("h5");
-        queueLabel.textContent = `Queue: ${queueName}`;
+        queueLabel.textContent = `${queueName}`;
         queueContainer.appendChild(queueLabel);
 
-        // Render sorted jobs, showing position within the queue
         queueJobs.forEach((job, index) => {
             const card = job.jobType === "ANALYTICS_TABLE"
                 ? createAnalyticsTableCard(job)
                 : createDefaultCard(job);
 
-            // Label showing the position of job in the queue
+            // Add status-specific styling
+            card.classList.add(getJobStatusClass(job.jobStatus));
+
             const positionLabel = document.createElement("div");
             positionLabel.className = "position-label";
-            positionLabel.textContent = `Job ${job.queuePosition + 1} of ${queueJobs.length}`;
+            positionLabel.textContent = `Job ${index + 1} of ${queueJobs.length}`;
             card.appendChild(positionLabel);
 
             queueContainer.appendChild(card);
@@ -113,13 +121,25 @@ window.renderRunningJobs = function (jobs) {
         container.appendChild(queueContainer);
     });
 
-    if (!hasRunningJobs) {
+    if (!hasActiveQueues) {
         container.innerHTML = "<div class=\"card\"><div class=\"card-title\">No running jobs</div></div>";
     }
 };
 
-
-
+function getJobStatusClass(status) {
+    switch (status) {
+    case "RUNNING":
+        return "job-running";
+    case "COMPLETED":
+        return "job-completed";
+    case "FAILED":
+        return "job-failed";
+    case "SCHEDULED":
+        return "job-scheduled";
+    default:
+        return "job-unknown";
+    }
+}
 
 window.updateJobLists = function (jobs) {
 
