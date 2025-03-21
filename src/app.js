@@ -23,16 +23,20 @@ function pollJobConfigurations() {
             
             window.renderRunningJobs(data.jobConfigurations);
             window.updateJobsTable(data.jobConfigurations);
+
+            // Integrate the task fetching function here
+            fetchAndDisplayRunningJobTasks(data.jobConfigurations);
         } catch (error) {
             console.error("Failed to fetch job configurations:", error);
         }
     }, 1000); // Poll every second
 }
 
+
 window.renderRunningJobs = function (jobs) {
     const container = document.getElementById("runningJobsContainer");
     container.innerHTML = ""; // Clear previous entries
-
+    
     // Create a map to hold jobs by their queue name
     const queueMap = jobs.reduce((map, job) => {
         const queueName = job.queueName || "independent";
@@ -43,31 +47,45 @@ window.renderRunningJobs = function (jobs) {
         return map;
     }, {});
 
+    let hasRunningQueue = false;
+    
     Object.keys(queueMap).forEach((queueName) => {
-        // Sort jobs within each queue by their position
         const queueJobs = queueMap[queueName];
-        queueJobs.sort((a, b) => a.queuePosition - b.queuePosition);
+        
+        // Check if any job in the queue is running
+        if (queueJobs.some(job => job.jobStatus === "RUNNING")) {
+            hasRunningQueue = true;
+            
+            // Sort jobs within each queue by position
+            queueJobs.sort((a, b) => a.queuePosition - b.queuePosition);
+            
+            queueJobs.forEach((job) => {
+                const card = job.jobType === "ANALYTICS_TABLE" 
+                    ? createAnalyticsTableCard(job) 
+                    : createDefaultCard(job);
 
-        queueJobs.forEach((job) => {
-            const card = job.jobType === "ANALYTICS_TABLE" 
-                ? createAnalyticsTableCard(job) 
-                : createDefaultCard(job);
+                // Add Queue Position Label
+                const queueLabel = document.createElement("div");
+                queueLabel.className = "queue-label";
+                queueLabel.textContent = `Job ${job.queuePosition + 1} of ${queueJobs.length}`;
+                card.appendChild(queueLabel);
 
-            // Add visual indicators based on job status
-            if (job.jobStatus === "RUNNING") {
-                card.classList.add("running-job");
-            } else if (job.jobStatus === "COMPLETED") {
-                card.classList.add("finished-job");
-            } else {
-                card.classList.add("upcoming-job");
-            }
-
-            container.appendChild(card);
-        });
+                // Set visual indication for job status
+                if (job.jobStatus === "RUNNING") {
+                    card.classList.add("running-job");
+                } else if (job.jobStatus === "COMPLETED") {
+                    card.classList.add("completed-job");
+                } else if (job.jobStatus === "DISABLED" || job.jobStatus === "SCHEDULED") {
+                    card.classList.add("upcoming-job");
+                }
+                
+                container.appendChild(card);
+            });
+        }
     });
 
-    // If there are no running jobs and no queue jobs displayed
-    if (container.innerHTML === "") {
+    // If no running jobs or running queues are displayed
+    if (!hasRunningQueue) {
         container.innerHTML = "<div class=\"card\"><div class=\"card-title\">No running jobs</div></div>";
     }
 };
@@ -78,16 +96,101 @@ function createAnalyticsTableCard(job) {
     const titleRegex = /^ANALYTICS_TABLE \(\d+\)$/;
     const displayName = titleRegex.test(job.displayName) ? "Analytics table (manual run)" : job.displayName;
     const years = job.jobParameters.years || "All";
+    const status = job.jobStatus || "Unknown";
 
-    const card = document.createElement("div"); // Declare card
-    card.className = "card";
+    const card = document.createElement("div");
+    card.className = "card analytics-card"; 
     card.innerHTML = `
         <div class="card-title">${displayName}</div>
+        <div>Status: ${status}</div>
         <div>ID: ${job.id}</div>
         <div>Years: ${years}</div>
         ${renderAnalyticsParametersTable(job.jobParameters)}
+        <button class="btn modal-trigger" data-target="jobInfoModal" onclick="showJobInfoModal('${job.jobType}', '${job.id}')">View Details</button>
     `;
     return card;
+}
+
+async function fetchAndDisplayRunningJobTasks(jobs) {
+    try {
+        const runningJobsDetails = jobs
+            .filter(job => job.jobStatus === "RUNNING")
+            .map(job => ({ type: job.jobType, id: job.id }));
+
+        if (runningJobsDetails.length > 0) {
+            const taskMessages = [];
+
+            for (const jobDetail of runningJobsDetails) {
+                try {
+                    const tasks = await d2Get(`/api/system/tasks/${jobDetail.type}/${jobDetail.id}`);
+
+                    const categorizedMessages = categorizeMessages(tasks);
+
+                    taskMessages.push(formatCategorizedMessages(categorizedMessages));
+                } catch (error) {
+                    console.error(`Error fetching tasks for job ${jobDetail.id}:`, error);
+                    taskMessages.push(`Error fetching tasks for job ${jobDetail.id}.`);
+                }
+            }
+
+            document.getElementById("tickerContent").innerHTML = taskMessages.join("<hr>");
+        } else {
+            document.getElementById("tickerContent").textContent = "No running tasks.";
+        }
+    } catch (error) {
+        console.error("Error processing running jobs:", error);
+        document.getElementById("tickerContent").textContent = "Error processing running jobs.";
+    }
+}
+
+function categorizeMessages(tasks) {
+    const grouped = {
+        currentTask: [],
+        completed: [],
+        info: [],
+        loop: [],
+    };
+
+    tasks.forEach(task => {
+        if (task.completed) {
+            grouped.completed.push(task);
+        } else if (task.level === "LOOP") {
+            grouped.loop.push(task);
+        } else {
+            grouped.info.push(task);
+            if (task.level === "INFO") {
+                grouped.currentTask.push(task);
+            }
+        }
+    });
+
+    return grouped;
+}
+
+function formatCategorizedMessages(categorizedMessages) {
+    let formatted = "";
+
+    if (categorizedMessages.currentTask.length > 0) {
+        formatted += "<strong>Current Task</strong><br>";
+        formatted += categorizedMessages.currentTask.slice(-3).map(task => `${task.time} - ${task.message}`).join("<br>");
+    }
+
+    if (categorizedMessages.completed.length > 0) {
+        formatted += "<strong>Completed:</strong><br>";
+        formatted += categorizedMessages.completed.slice(-3).map(task => `${task.time} - ${task.message}`).join("<br>");
+    }
+
+    if (categorizedMessages.info.length > 0) {
+        formatted += "<strong>Info:</strong><br>";
+        formatted += categorizedMessages.info.slice(-3).map(task => `${task.time} - ${task.message}`).join("<br>");
+    }
+
+    if (categorizedMessages.loop.length > 0) {
+        formatted += "<strong>Loop:</strong><br>";
+        formatted += categorizedMessages.loop.slice(-3).map(task => `${task.time} - ${task.message}`).join("<br>");
+    }
+
+    return formatted;
 }
 
 
@@ -129,7 +232,7 @@ function renderAnalyticsParametersTable(params = {}) {
             </tr>`
         )
         .join("")}
-        <tr><td>Skip Programs</td><td>${skipPrograms.join(", ")}</td></tr>
+        <tr><td>Skipped programs</td><td>${skipPrograms.join(", ")}</td></tr>
     </tbody></table>
     `;
 
@@ -148,22 +251,41 @@ function isIncluded(element, skipTables, params) {
 
 function createDefaultCard(job) {
     const formattedParameters = formatJobParameters(job.jobParameters);
+    const status = job.jobStatus || "Unknown";
+
     const card = document.createElement("div");
     card.className = "card";
     card.innerHTML = `
         <div class="card-title">${job.displayName}</div>
+        <div>Status: ${status}</div>
         <div>Job Type: ${job.jobType}</div>
         <div>Last Executed: ${job.lastExecuted || "N/A"}</div>
         <div>Last Runtime: ${job.lastRuntimeExecution || "N/A"}</div>
         ${formattedParameters}
+        <button class="btn modal-trigger" data-target="jobInfoModal" onclick="showJobInfoModal('${job.jobType}', '${job.id}')">View Details</button>
     `;
     return card;
 }
 
+window.showJobInfoModal = async function (jobType, jobId) {
+    try {
+        const tasks = await d2Get(`/api/system/tasks/${jobType}/${jobId}`);
+        const formattedTasks = tasks.map(task => `
+            <div><strong>${task.time}</strong>: ${task.message}</div>
+        `).join("");
+        
+        document.getElementById("jobInfoModalContent").innerHTML = formattedTasks;
+        $("#jobInfoModal").modal("open");
+    } catch (error) {
+        document.getElementById("jobInfoModalContent").innerHTML = "Error loading task details.";
+        console.error("Error fetching task details:", error);
+    }
+};
+
 function formatJobParameters(params) {
     if (!params) return "<div>No parameters available</div>";
 
-    let formattedParams = "<div>Parameters:</div>";
+    let formattedParams = "";
     formattedParams +=
         "<table class=\"parameter-table\"><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>";
     for (let key in params) {

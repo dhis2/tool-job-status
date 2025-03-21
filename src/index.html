@@ -15,6 +15,24 @@
             <h4>Running Jobs</h4>
             <div id="runningJobsContainer" class="cards-container"></div>
         </div>
+
+        <div id="currentTaskDetails" class="task-ticker">
+            <div id="tickerContent">Fetching task updates...</div>
+        </div>
+
+        <div id="jobInfoModal" class="modal">
+            <div class="modal-content">
+                <h4>Job Details</h4>
+                <div id="jobInfoModalContent">
+                    <!-- Detailed task information will be rendered here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-close btn">Close</button>
+            </div>
+        </div>
+        
+        
         <div id="allJobs" class="section">
             <h4>All Jobs</h4>
             <table id="jobsTable" class="display">
@@ -26,6 +44,7 @@
                         <th>Schedule</th>
                         <th>Next run</th>
                         <th>Status</th>
+                        <th>On/off</th>
                         <th>Info</th>
                     </tr>
                 </thead>
