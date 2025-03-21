@@ -9,7 +9,7 @@ import "materialize-css/dist/css/materialize.min.css";
 let modalInterval; // Variable to store the modal polling interval
 let activeJobId; // Store current active job id for the modal
 let activeJobType; // Store current active job type for the modal
-
+let activeTaskPolls = new Map(); // Store polling intervals for running tasks
 
 window.onload = function () {
     pollJobConfigurations();
@@ -63,6 +63,52 @@ function startModalPolling(jobType, jobId) {
     }, 5000); // Update interval based on requirements
 }
 
+// Update the extractProgressFromTask function to take the full tasks array
+function extractProgressFromTask(tasks) {
+    const latestTask = tasks[0];
+    if (latestTask?.level === 'LOOP') {
+        const match = latestTask.message.match(/\[(\d+)\/(\d+)\]/);
+        if (match) {
+            const current = parseInt(match[1]);
+            const total = parseInt(match[2]);
+            const percentage = Math.round((current / total) * 100);
+            
+            // Find the previous non-LOOP message to get the action description
+            const actionTask = tasks.find(task => task.level !== 'LOOP');
+            const action = actionTask ? actionTask.message : 'Processing';
+            
+            return { percentage, action };
+        }
+    }
+    return null;
+}
+
+// Update the startTaskPolling function
+function startTaskPolling(jobType, jobId) {
+    if (activeTaskPolls.has(jobId)) {
+        return; // Already polling this job
+    }
+
+    const pollInterval = setInterval(async () => {
+        try {
+            const tasks = await d2Get(`/api/system/tasks/${jobType}/${jobId}`);
+            const progress = extractProgressFromTask(tasks);
+            
+            const progressDiv = document.getElementById(`progress-${jobId}`);
+            if (progressDiv) {
+                if (progress) {
+                    progressDiv.innerHTML = `<div>${progress.action}<br>${progress.percentage}% complete</div>`;
+                } else {
+                    progressDiv.innerHTML = "Processing...";
+                }
+            }
+        } catch (error) {
+            console.error(`Error polling tasks for job ${jobId}:`, error);
+        }
+    }, 5000);
+
+    activeTaskPolls.set(jobId, pollInterval);
+}
 
 window.renderRunningJobs = function(jobs) {
     const container = document.getElementById("runningJobsContainer");
@@ -105,7 +151,7 @@ window.renderRunningJobs = function(jobs) {
         queueJobs.sort((a, b) => a.queuePosition - b.queuePosition);
 
         const queueLabel = document.createElement("h5");
-        queueLabel.textContent = `Queue: ${queueName}`;
+        queueLabel.textContent = `${queueName}`;
         queueContainer.appendChild(queueLabel);
 
         queueJobs.forEach((job, index) => {
@@ -150,6 +196,21 @@ window.renderRunningJobs = function(jobs) {
     if (!hasActiveJobs) {
         container.innerHTML = "<div class=\"card\"><div class=\"card-title\">No running jobs</div></div>";
     }
+
+    // Clear existing polls for jobs that are no longer running
+    for (const [jobId, interval] of activeTaskPolls.entries()) {
+        if (!jobs.some(job => job.id === jobId && job.jobStatus === "RUNNING")) {
+            clearInterval(interval);
+            activeTaskPolls.delete(jobId);
+        }
+    }
+
+    // Start polling for running jobs
+    jobs.forEach(job => {
+        if (job.jobStatus === "RUNNING") {
+            startTaskPolling(job.jobType, job.id);
+        }
+    });
 };
 
 function getJobStatusClass(status) {
@@ -272,6 +333,7 @@ function createAnalyticsTableCard(job) {
         <div>ID: ${job.id}</div>
         <div>Years: ${years}</div>
         ${renderAnalyticsParametersTable(job.jobParameters)}
+        <div id="progress-${job.id}" class="progress-info">Processing...</div>
         <div class="card-footer">
             <button class="btn modal-trigger" data-target="jobInfoModal" onclick="showJobInfoModal('${job.jobType}', '${job.id}')">View Details</button>
         </div>
@@ -292,6 +354,7 @@ function createDefaultCard(job) {
         <div>Last Executed: ${job.lastExecuted || "N/A"}</div>
         <div>Last Runtime: ${job.lastRuntimeExecution || "N/A"}</div>
         ${formattedParameters}
+        <div id="progress-${job.id}" class="progress-info">Processing...</div>
         <div class="card-footer">
             <button class="btn modal-trigger" data-target="jobInfoModal" onclick="showJobInfoModal('${job.jobType}', '${job.id}')">View Details</button>
         </div>

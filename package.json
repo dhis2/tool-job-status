@@ -1,7 +1,7 @@
 {
   "name": "tool-job-status",
   "description": "Tool to monitor DHIS2 background jobs",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "dependencies": {
     "chart.js": "^4.4.8",
     "choices.js": "^11.1.0",
