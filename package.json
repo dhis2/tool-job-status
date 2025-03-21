@@ -1,6 +1,6 @@
 {
-  "name": "tool-template",
-  "description": "Template for basic DHIS2 tools",
+  "name": "tool-job-status",
+  "description": "Tool to monitor DHIS2 background jobs",
   "version": "0.1.0",
   "dependencies": {
     "chart.js": "^4.4.8",
@@ -47,6 +47,7 @@
       "48": "img/icons/app_logo_48x48.png",
       "96": "img/icons/app_logo_96x96.png"
     },
-    "appType": "APP"
+    "appType": "APP",
+    "name": "Job Status Tool"
   }
 }
