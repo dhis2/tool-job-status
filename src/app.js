@@ -13,13 +13,20 @@ let activeJobType; // Store current active job type for the modal
 
 window.onload = function () {
     pollJobConfigurations();
-    $(".modal").modal(); // Initialize modals
 
-    $("#jobInfoModal").on("-close", function() {
-        clearInterval(modalInterval); // Stop polling once modal is closed
+    // Initialize modals with appropriate callbacks
+    $("#jobInfoModal").modal({
+        onOpenStart: function() {
+            if (activeJobType && activeJobId) {
+                startModalPolling(activeJobType, activeJobId);
+            }
+        },
+        onCloseEnd: function() {
+            clearInterval(modalInterval);
+        }
     });
-    
 };
+
 
 function pollJobConfigurations() {
     setInterval(async () => {
@@ -35,16 +42,15 @@ function pollJobConfigurations() {
 }
 
 function startModalPolling(jobType, jobId) {
-    activeJobType = jobType; // Set active job type
-    activeJobId = jobId; // Set active job id
+    // Prevent polling if not active
+    if (!jobType || !jobId) return;
 
-    // Clear any existing interval to prevent overlapping calls
-    clearInterval(modalInterval);
+    clearInterval(modalInterval);  // Clear any existing interval
 
-    // Setup interval to fetch tasks every second while modal is open
+    // Begin new interval
     modalInterval = setInterval(async () => {
         try {
-            const tasks = await d2Get(`/api/system/tasks/${activeJobType}/${activeJobId}`);
+            const tasks = await d2Get(`/api/system/tasks/${jobType}/${jobId}`);
             const formattedTasks = tasks.slice(0, 5).map(task => `
                 <div><strong>${task.time}</strong>: ${task.message}</div>
             `).join("");
@@ -54,7 +60,7 @@ function startModalPolling(jobType, jobId) {
             document.getElementById("jobInfoModalContent").innerHTML = "Error loading task details.";
             console.error("Error fetching task details:", error);
         }
-    }, 5000);
+    }, 5000); // Update interval based on requirements
 }
 
 
@@ -62,31 +68,57 @@ window.renderRunningJobs = function (jobs) {
     const container = document.getElementById("runningJobsContainer");
     container.innerHTML = ""; // Clear previous entries
 
-    // Filter for running jobs
-    const runningJobs = jobs.filter(job => job.jobStatus === "RUNNING" && job.jobType != "HOUSEKEEPING");
-    let hasRunningJobs = runningJobs.length > 0;
-
-    runningJobs.forEach((job) => {
-        // Create card for each running job
-        const card = job.jobType === "ANALYTICS_TABLE"
-            ? createAnalyticsTableCard(job)
-            : createDefaultCard(job);
-
-        // Add queue position if applicable
-        if (job.queuePosition !== undefined && job.queueSize) {
-            const queueIndicator = document.createElement("div");
-            queueIndicator.className = "queue-label";
-            queueIndicator.textContent = `[Q ${job.queuePosition + 1} of ${job.queueSize}]`;
-            card.insertAdjacentElement("afterbegin", queueIndicator);
+    // Construct a map of running jobs by queue name
+    const queueMap = jobs.reduce((map, job) => {
+        if (job.jobStatus === "RUNNING" && job.jobType !== "HOUSEKEEPING") {
+            const queueName = job.queueName || "Independent"; // Default to 'Independent' for unqueued jobs
+            if (!map[queueName]) {
+                map[queueName] = [];
+            }
+            map[queueName].push(job);
         }
-        
-        container.appendChild(card);
+        return map;
+    }, {});
+
+    let hasRunningJobs = false;
+
+    Object.keys(queueMap).forEach((queueName) => {
+        const queueJobs = queueMap[queueName];
+        hasRunningJobs = hasRunningJobs || queueJobs.length > 0;
+
+        // Sort the jobs within each queue by 'queuePosition'
+        queueJobs.sort((a, b) => a.queuePosition - b.queuePosition);
+
+        const queueContainer = document.createElement("div");
+        queueContainer.className = "queue-container";
+        const queueLabel = document.createElement("h5");
+        queueLabel.textContent = `Queue: ${queueName}`;
+        queueContainer.appendChild(queueLabel);
+
+        // Render sorted jobs, showing position within the queue
+        queueJobs.forEach((job, index) => {
+            const card = job.jobType === "ANALYTICS_TABLE"
+                ? createAnalyticsTableCard(job)
+                : createDefaultCard(job);
+
+            // Label showing the position of job in the queue
+            const positionLabel = document.createElement("div");
+            positionLabel.className = "position-label";
+            positionLabel.textContent = `Job ${job.queuePosition + 1} of ${queueJobs.length}`;
+            card.appendChild(positionLabel);
+
+            queueContainer.appendChild(card);
+        });
+
+        container.appendChild(queueContainer);
     });
 
     if (!hasRunningJobs) {
         container.innerHTML = "<div class=\"card\"><div class=\"card-title\">No running jobs</div></div>";
     }
 };
+
+
 
 
 window.updateJobLists = function (jobs) {
@@ -160,13 +192,14 @@ function formatTimeUntilNextRun(nextExecutionTime) {
 
 
 window.showJobInfoModal = async function (jobType, jobId) {
+    activeJobType = jobType; // Set active job type
+    activeJobId = jobId; // Set active job id
     try {
         const tasks = await d2Get(`/api/system/tasks/${jobType}/${jobId}`);
         const formattedTasks = tasks.slice(0, 5).map(task => `
             <div><strong>${task.time}</strong>: ${task.message}</div>
         `).join("");
 
-        startModalPolling(jobType, jobId); // Start polling for task details
         document.getElementById("jobInfoModalContent").innerHTML = formattedTasks;
         $("#jobInfoModal").modal("open");
     } catch (error) {
@@ -174,6 +207,7 @@ window.showJobInfoModal = async function (jobType, jobId) {
         console.error("Error fetching task details:", error);
     }
 };
+
 
 
 function createAnalyticsTableCard(job) {

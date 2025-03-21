@@ -208,3 +208,80 @@ h4 {
     background-color: #f44336;
     color: #fff;
 }
+
+.queue-container {
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    padding: 10px;
+    background-color: #f5f5f5;
+}
+
+.position-label {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background-color: #e0e0e0;
+    padding: 5px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.card {
+    position: relative; /* Enable positioning within the card */
+    margin: 10px 0;
+    padding: 15px;
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.queue-label {
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+h5 {
+    margin: 0;
+}
+
+
+.running-job {
+    border: 3px solid green;
+    background-color: #e0f7fa;
+}
+
+.completed-job {
+    border: 3px solid blue;
+    background-color: #e3f2fd;
+}
+
+.queue-container {
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    padding: 10px;
+    background-color: #f5f5f5;
+}
+
+.position-label {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background-color: #e0e0e0;
+    padding: 5px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.card {
+    position: relative;
+    margin: 10px 0;
+    padding: 15px;
+    background-color: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
