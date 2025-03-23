@@ -72,20 +72,57 @@ function startModalPolling(jobType, jobId) {
 
     clearInterval(modalInterval);  // Clear any existing interval
 
-    // Begin new interval
+    // Begin new interval only if job is running
     modalInterval = setInterval(async () => {
         try {
-            const tasks = await d2Get(`/api/system/tasks/${jobType}/${jobId}`);
-            const formattedTasks = tasks.slice(0, 5).map(task => `
-                <div><strong>${task.time}</strong>: ${task.message}</div>
-            `).join("");
+            // Check if job is still running before updating
+            const jobElement = document.querySelector(`[data-job-id="${jobId}"]`);
+            const isJobRunning = jobElement?.classList.contains('job-running');
+            
+            if (!isJobRunning) {
+                clearInterval(modalInterval);
+                return;
+            }
 
-            document.getElementById("jobInfoModalContent").innerHTML = formattedTasks;
+            const tasks = await d2Get(`/api/system/tasks/${jobType}/${jobId}`);
+            const modalContent = document.getElementById("jobInfoModalContent");
+            
+            // Preserve existing prediction summary if present
+            const existingSummary = modalContent.querySelector('.parameter-table');
+            let formattedContent = '';
+
+            // For completed predictor jobs, show summary
+            if (jobType === 'PREDICTOR') {
+                const completedTask = tasks.find(task => 
+                    task.message && task.message.includes('PredictionSummary'));
+                
+                if (completedTask) {
+                    const summary = parsePredictionSummary(completedTask.message);
+                    if (summary) {
+                        formattedContent += formatPredictionSummary(summary);
+                        formattedContent += '<hr>';
+                    } else if (existingSummary) {
+                        formattedContent += existingSummary.outerHTML + '<hr>';
+                    }
+                } else if (existingSummary) {
+                    formattedContent += existingSummary.outerHTML + '<hr>';
+                }
+            }
+
+            // Add task history
+            formattedContent += tasks
+                .slice(0, 5)
+                .filter(task => task.message)
+                .map(task => `
+                    <div><strong>${task.time}</strong>: ${task.message}</div>
+                `)
+                .join('');
+
+            modalContent.innerHTML = formattedContent || "No task details available";
         } catch (error) {
-            document.getElementById("jobInfoModalContent").innerHTML = "Error loading task details.";
             console.error("Error fetching task details:", error);
         }
-    }, 5000); // Update interval based on requirements
+    }, 5000);
 }
 
 // Update the extractProgressFromTask function to handle action message better
@@ -110,7 +147,7 @@ function extractProgressFromTask(tasks) {
 
 function startTaskPolling(jobType, jobId) {
     if (activeTaskPolls.has(jobId)) {
-        return; // Already polling this job
+        return;
     }
 
     let lastMessage = '';
@@ -124,26 +161,29 @@ function startTaskPolling(jobType, jobId) {
             
             const progressDiv = document.getElementById(`progress-${jobId}`);
             if (progressDiv) {
-                let newMessage = lastMessage; // Start with previous message
+                let newMessage = lastMessage;
                 
                 if (result.isLoop) {
-                    // Update action if new one is available
-                    if (result.action) lastAction = result.action;
+                    // Only update action if it's defined
+                    if (result.action && result.action.trim()) {
+                        lastAction = result.action;
+                    }
                     
-                    // Only update if percentage changed or we have a new action
                     if (result.percentage !== lastPercentage || !newMessage) {
-                        newMessage = `<div>${lastAction}<br>${result.percentage}% complete</div>`;
+                        newMessage = lastAction ? 
+                            `<div>${lastAction}<br>${result.percentage}% complete</div>` : 
+                            `<div>${result.percentage}% complete</div>`;
                         lastPercentage = result.percentage;
                     }
-                } else if (tasks[0]?.level === 'INFO') {
-                    // Store new action message
-                    lastAction = result.message;
-                    newMessage = `<div>${result.message}</div>`;
+                } else if (tasks[0]?.level === 'INFO' && tasks[0]?.message) {
+                    // Only store/show non-empty messages
+                    lastAction = tasks[0].message.trim();
+                    newMessage = `<div>${lastAction}</div>`;
                     lastPercentage = null;
                 }
 
-                // Only update DOM if message content actually changed
-                if (newMessage !== lastMessage) {
+                // Only update DOM if we have a valid message that changed
+                if (newMessage && newMessage !== lastMessage) {
                     progressDiv.innerHTML = newMessage;
                     lastMessage = newMessage;
                 }
@@ -167,11 +207,11 @@ function createAnalyticsTableCard(job) {
     card.className = "card analytics-card"; 
     card.innerHTML = `
         <div class="card-title">${displayName}</div>
-        <div>Status: ${status}</div>
+        <div class="status">Status: ${status}</div>
         <div>ID: ${job.id}</div>
         <div>Years: ${years}</div>
         ${renderAnalyticsParametersTable(job.jobParameters)}
-        <div id="progress-${job.id}" class="progress-info"></div>
+        <div id="progress-${job.id}" class="progress-info" style="display: ${job.isRunning ? 'block' : 'none'}"></div>
         <div class="card-footer">
             <button class="btn modal-trigger" data-target="jobInfoModal" onclick="showJobInfoModal('${job.jobType}', '${job.id}')">View Details</button>
         </div>
@@ -187,12 +227,12 @@ function createDefaultCard(job) {
     card.className = "card";
     card.innerHTML = `
         <div class="card-title">${job.displayName}</div>
-        <div>Status: ${status}</div>
+        <div class="status">Status: ${status}</div>
         <div>Job Type: ${job.jobType}</div>
         <div>Last Executed: ${job.lastExecuted || "N/A"}</div>
         <div>Last Runtime: ${job.lastRuntimeExecution || "N/A"}</div>
         ${formattedParameters}
-        <div id="progress-${job.id}" class="progress-info"></div>
+        <div id="progress-${job.id}" class="progress-info" style="display: ${job.isRunning ? 'block' : 'none'}"></div>
         <div class="card-footer">
             <button class="btn modal-trigger" data-target="jobInfoModal" onclick="showJobInfoModal('${job.jobType}', '${job.id}')">View Details</button>
         </div>
@@ -200,30 +240,51 @@ function createDefaultCard(job) {
     return card;
 }
 
-// Modify renderRunningJobs to use isRunning property
+// Add new function to update existing card content
+function updateCardContent(job, existingCard) {
+    const statusElement = existingCard.querySelector('.status');
+    if (statusElement) {
+        statusElement.textContent = `Status: ${job.jobStatus || "Unknown"}`;
+    }
+    
+    // Update progress div visibility
+    const progressDiv = existingCard.querySelector(`#progress-${job.id}`);
+    if (progressDiv) {
+        progressDiv.style.display = job.isRunning ? 'block' : 'none';
+    }
+    
+    existingCard.className = `card ${job.jobType === "ANALYTICS_TABLE" ? "analytics-card" : ""} ${getJobStatusClass(job.jobStatus)}`;
+}
+
+// Modify renderRunningJobs to handle updates
 window.renderRunningJobs = function(jobs) {
     const container = document.getElementById("runningJobsContainer");
-    container.innerHTML = ""; // Clear previous entries
+    const existingCards = new Map(); // Store existing cards by job ID
+    
+    // Store existing cards before clearing container
+    document.querySelectorAll('[data-job-id]').forEach(card => {
+        existingCards.set(card.dataset.jobId, card);
+    });
 
-    // 1. Find all queues that have at least one running job
+    container.innerHTML = ""; // Clear container but keep card references
+
+    // Group jobs as before
     const activeQueues = new Set(
         jobs
             .filter(job => job.isRunning && job.jobType !== "HOUSEKEEPING" && job.queueName)
             .map(job => job.queueName)
     );
 
-    // 2. Group jobs into queued and independent
+    // Handle queued jobs
     const queueMap = jobs.reduce((map, job) => {
         if (job.queueName && activeQueues.has(job.queueName)) {
-            if (!map[job.queueName]) {
-                map[job.queueName] = [];
-            }
+            if (!map[job.queueName]) map[job.queueName] = [];
             map[job.queueName].push(job);
         }
         return map;
     }, {});
 
-    // Handle independent running jobs separately
+    // Handle independent jobs
     const independentJobs = jobs.filter(job => 
         !job.queueName && 
         job.isRunning && 
@@ -232,52 +293,66 @@ window.renderRunningJobs = function(jobs) {
 
     let hasActiveJobs = Object.keys(queueMap).length > 0 || independentJobs.length > 0;
 
-    // 3. Render queued jobs
-    Object.keys(queueMap).forEach(queueName => {
-        const queueJobs = queueMap[queueName];
+    // Render queued jobs
+    Object.entries(queueMap).forEach(([queueName, queueJobs]) => {
         const queueContainer = document.createElement("div");
         queueContainer.className = "queue-container";
 
-        // Sort jobs within each queue by queuePosition
-        queueJobs.sort((a, b) => a.queuePosition - b.queuePosition);
-
         const queueLabel = document.createElement("h5");
-        queueLabel.textContent = `${queueName}`;
+        queueLabel.textContent = queueName;
         queueContainer.appendChild(queueLabel);
 
-        queueJobs.forEach((job, index) => {
-            const card = job.jobType === "ANALYTICS_TABLE"
-                ? createAnalyticsTableCard(job)
-                : createDefaultCard(job);
+        queueJobs
+            .sort((a, b) => a.queuePosition - b.queuePosition)
+            .forEach((job, index) => {
+                let card = existingCards.get(job.id);
+                if (card) {
+                    // Update existing card
+                    updateCardContent(job, card);
+                    existingCards.delete(job.id); // Remove from map to track removed cards
+                } else {
+                    // Create new card
+                    card = job.jobType === "ANALYTICS_TABLE"
+                        ? createAnalyticsTableCard(job)
+                        : createDefaultCard(job);
+                    card.setAttribute('data-job-id', job.id);
+                }
 
-            card.classList.add(getJobStatusClass(job.jobStatus));
+                // Update position label
+                let positionLabel = card.querySelector('.position-label');
+                if (!positionLabel) {
+                    positionLabel = document.createElement("div");
+                    positionLabel.className = "position-label";
+                    card.appendChild(positionLabel);
+                }
+                positionLabel.textContent = `Job ${index + 1} of ${queueJobs.length}`;
 
-            const positionLabel = document.createElement("div");
-            positionLabel.className = "position-label";
-            positionLabel.textContent = `Job ${index + 1} of ${queueJobs.length}`;
-            card.appendChild(positionLabel);
-
-            queueContainer.appendChild(card);
-        });
+                queueContainer.appendChild(card);
+            });
 
         container.appendChild(queueContainer);
     });
 
-    // 4. Render independent running jobs
+    // Render independent jobs
     if (independentJobs.length > 0) {
         const independentContainer = document.createElement("div");
         independentContainer.className = "queue-container";
-
+        
         const independentLabel = document.createElement("h5");
         independentLabel.textContent = "Now running";
         independentContainer.appendChild(independentLabel);
 
         independentJobs.forEach(job => {
-            const card = job.jobType === "ANALYTICS_TABLE"
-                ? createAnalyticsTableCard(job)
-                : createDefaultCard(job);
-
-            card.classList.add(getJobStatusClass(job.jobStatus));
+            let card = existingCards.get(job.id);
+            if (card) {
+                updateCardContent(job, card);
+                existingCards.delete(job.id);
+            } else {
+                card = job.jobType === "ANALYTICS_TABLE"
+                    ? createAnalyticsTableCard(job)
+                    : createDefaultCard(job);
+                card.setAttribute('data-job-id', job.id);
+            }
             independentContainer.appendChild(card);
         });
 
@@ -288,7 +363,7 @@ window.renderRunningJobs = function(jobs) {
         container.innerHTML = "<div class=\"card\"><div class=\"card-title\">No running jobs</div></div>";
     }
 
-    // Clear existing polls for jobs that are no longer running
+    // Update task polling
     for (const [jobId, interval] of activeTaskPolls.entries()) {
         if (!jobs.some(job => job.id === jobId && job.isRunning)) {
             clearInterval(interval);
@@ -296,9 +371,8 @@ window.renderRunningJobs = function(jobs) {
         }
     }
 
-    // Start polling for running jobs
     jobs.forEach(job => {
-        if (job.isRunning) {
+        if (job.isRunning && !activeTaskPolls.has(job.id)) {
             startTaskPolling(job.jobType, job.id);
         }
     });
@@ -393,15 +467,37 @@ function formatTimeUntilNextRun(nextExecutionTime) {
 
 
 window.showJobInfoModal = async function (jobType, jobId) {
-    activeJobType = jobType; // Set active job type
-    activeJobId = jobId; // Set active job id
+    activeJobType = jobType;
+    activeJobId = jobId;
     try {
         const tasks = await d2Get(`/api/system/tasks/${jobType}/${jobId}`);
-        const formattedTasks = tasks.slice(0, 5).map(task => `
-            <div><strong>${task.time}</strong>: ${task.message}</div>
-        `).join("");
+        let formattedContent = '';
 
-        document.getElementById("jobInfoModalContent").innerHTML = formattedTasks;
+        // Check for prediction summary in completed tasks
+        if (jobType === 'PREDICTOR') {
+            const completedTask = tasks.find(task => 
+                task.message && task.message.includes('PredictionSummary'));
+            
+            if (completedTask) {
+                const summary = parsePredictionSummary(completedTask.message);
+                if (summary) {
+                    formattedContent += formatPredictionSummary(summary);
+                    formattedContent += '<hr>'; // Add separator
+                }
+            }
+        }
+
+        // Add task history
+        formattedContent += tasks
+            .slice(0, 5)
+            .filter(task => task.message)
+            .map(task => `
+                <div><strong>${task.time}</strong>: ${task.message}</div>
+            `)
+            .join('');
+
+        document.getElementById("jobInfoModalContent").innerHTML = 
+            formattedContent || "No task details available";
         $("#jobInfoModal").modal("open");
     } catch (error) {
         document.getElementById("jobInfoModalContent").innerHTML = "Error loading task details.";
@@ -409,7 +505,54 @@ window.showJobInfoModal = async function (jobType, jobId) {
     }
 };
 
+// Add function to parse prediction summary
+function parsePredictionSummary(message) {
+    const match = message.match(/PredictionSummary{(.+)}/);
+    if (!match) return null;
 
+    const summaryContent = match[1];
+    const pairs = summaryContent.split(',').map(pair => pair.trim());
+    const summary = {};
+
+    pairs.forEach(pair => {
+        const [key, value] = pair.split('=');
+        if (key && value) {
+            summary[key.trim()] = value.trim().replace(/'/g, '');
+        }
+    });
+
+    return summary;
+}
+
+// Add function to format prediction summary as table
+function formatPredictionSummary(summary) {
+    if (!summary) return '';
+
+    const rows = [
+        ['Status', summary.status],
+        ['Predictors', summary.predictors],
+        ['Inserted values', summary.inserted],
+        ['Updated values', summary.updated],
+        ['Deleted values', summary.deleted],
+        ['Unchanged values', summary.unchanged]
+    ];
+
+    return `
+        <table class="parameter-table">
+            <thead>
+                <tr><th colspan="2">Prediction Summary</th></tr>
+            </thead>
+            <tbody>
+                ${rows.map(([label, value]) => `
+                    <tr>
+                        <td>${label}</td>
+                        <td>${value || 'N/A'}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+}
 
 function renderAnalyticsParametersTable(params = {}) {
     const skipTables = Array.isArray(params.skipTableTypes)
