@@ -38,7 +38,7 @@ function isJobRunning(jobType, jobId, taskMap) {
     
     if (!lastTask) return false;
     
-    return !lastTask.completed && lastTask.level !== 'ERROR';
+    return !lastTask.completed && lastTask.level !== "ERROR";
 }
 
 // Modify pollJobConfigurations to fetch both configurations and tasks
@@ -55,7 +55,7 @@ function pollJobConfigurations() {
             // Enhance job configurations with task status
             const enhancedJobs = configData.jobConfigurations.map(job => ({
                 ...job,
-                isRunning: job.jobStatus === 'RUNNING' || isJobRunning(job.jobType, job.id, tasksData)
+                isRunning: job.jobStatus === "RUNNING" || isJobRunning(job.jobType, job.id, tasksData)
             }));
 
             window.renderRunningJobs(enhancedJobs);
@@ -77,7 +77,7 @@ function startModalPolling(jobType, jobId) {
         try {
             // Check if job is still running before updating
             const jobElement = document.querySelector(`[data-job-id="${jobId}"]`);
-            const isJobRunning = jobElement?.classList.contains('job-running');
+            const isJobRunning = jobElement?.classList.contains("job-running");
             
             if (!isJobRunning) {
                 clearInterval(modalInterval);
@@ -88,24 +88,24 @@ function startModalPolling(jobType, jobId) {
             const modalContent = document.getElementById("jobInfoModalContent");
             
             // Preserve existing prediction summary if present
-            const existingSummary = modalContent.querySelector('.parameter-table');
-            let formattedContent = '';
+            const existingSummary = modalContent.querySelector(".parameter-table");
+            let formattedContent = "";
 
             // For completed predictor jobs, show summary
-            if (jobType === 'PREDICTOR') {
+            if (jobType === "PREDICTOR") {
                 const completedTask = tasks.find(task => 
-                    task.message && task.message.includes('PredictionSummary'));
+                    task.message && task.message.includes("PredictionSummary"));
                 
                 if (completedTask) {
                     const summary = parsePredictionSummary(completedTask.message);
                     if (summary) {
                         formattedContent += formatPredictionSummary(summary);
-                        formattedContent += '<hr>';
+                        formattedContent += "<hr>";
                     } else if (existingSummary) {
-                        formattedContent += existingSummary.outerHTML + '<hr>';
+                        formattedContent += existingSummary.outerHTML + "<hr>";
                     }
                 } else if (existingSummary) {
-                    formattedContent += existingSummary.outerHTML + '<hr>';
+                    formattedContent += existingSummary.outerHTML + "<hr>";
                 }
             }
 
@@ -116,7 +116,7 @@ function startModalPolling(jobType, jobId) {
                 .map(task => `
                     <div><strong>${task.time}</strong>: ${task.message}</div>
                 `)
-                .join('');
+                .join("");
 
             modalContent.innerHTML = formattedContent || "No task details available";
         } catch (error) {
@@ -128,7 +128,7 @@ function startModalPolling(jobType, jobId) {
 // Update the extractProgressFromTask function to handle action message better
 function extractProgressFromTask(tasks) {
     const latestTask = tasks[0];
-    if (latestTask?.level === 'LOOP') {
+    if (latestTask?.level === "LOOP") {
         const match = latestTask.message.match(/\[(\d+)\/(\d+)\]/);
         if (match) {
             const current = parseInt(match[1]);
@@ -136,8 +136,8 @@ function extractProgressFromTask(tasks) {
             const percentage = Math.round((current / total) * 100);
             
             // Find the first non-LOOP message for action description
-            const actionTask = tasks.find(task => task.level !== 'LOOP');
-            const action = actionTask ? actionTask.message : 'Processing';
+            const actionTask = tasks.find(task => task.level !== "LOOP");
+            const action = actionTask ? actionTask.message : "Processing";
             
             return { percentage, action, isLoop: true };
         }
@@ -150,7 +150,7 @@ function startTaskPolling(jobType, jobId) {
         return;
     }
 
-    let lastMessage = '';
+    let lastMessage = "";
     let lastAction = null;
     let lastPercentage = null;
     
@@ -175,7 +175,7 @@ function startTaskPolling(jobType, jobId) {
                             `<div>${result.percentage}% complete</div>`;
                         lastPercentage = result.percentage;
                     }
-                } else if (tasks[0]?.level === 'INFO' && tasks[0]?.message) {
+                } else if (tasks[0]?.level === "INFO" && tasks[0]?.message) {
                     // Only store/show non-empty messages
                     lastAction = tasks[0].message.trim();
                     newMessage = `<div>${lastAction}</div>`;
@@ -211,7 +211,7 @@ function createAnalyticsTableCard(job) {
         <div>ID: ${job.id}</div>
         <div>Years: ${years}</div>
         ${renderAnalyticsParametersTable(job.jobParameters)}
-        <div id="progress-${job.id}" class="progress-info" style="display: ${job.isRunning ? 'block' : 'none'}"></div>
+        <div id="progress-${job.id}" class="progress-info" style="display: ${job.isRunning ? "block" : "none"}"></div>
         <div class="card-footer">
             <button class="btn modal-trigger" data-target="jobInfoModal" onclick="showJobInfoModal('${job.jobType}', '${job.id}')">View Details</button>
         </div>
@@ -232,7 +232,7 @@ function createDefaultCard(job) {
         <div>Last Executed: ${job.lastExecuted || "N/A"}</div>
         <div>Last Runtime: ${job.lastRuntimeExecution || "N/A"}</div>
         ${formattedParameters}
-        <div id="progress-${job.id}" class="progress-info" style="display: ${job.isRunning ? 'block' : 'none'}"></div>
+        <div id="progress-${job.id}" class="progress-info" style="display: ${job.isRunning ? "block" : "none"}"></div>
         <div class="card-footer">
             <button class="btn modal-trigger" data-target="jobInfoModal" onclick="showJobInfoModal('${job.jobType}', '${job.id}')">View Details</button>
         </div>
@@ -242,7 +242,7 @@ function createDefaultCard(job) {
 
 // Add new function to update existing card content
 function updateCardContent(job, existingCard) {
-    const statusElement = existingCard.querySelector('.status');
+    const statusElement = existingCard.querySelector(".status");
     if (statusElement) {
         statusElement.textContent = `Status: ${job.jobStatus || "Unknown"}`;
     }
@@ -250,7 +250,7 @@ function updateCardContent(job, existingCard) {
     // Update progress div visibility
     const progressDiv = existingCard.querySelector(`#progress-${job.id}`);
     if (progressDiv) {
-        progressDiv.style.display = job.isRunning ? 'block' : 'none';
+        progressDiv.style.display = job.isRunning ? "block" : "none";
     }
     
     existingCard.className = `card ${job.jobType === "ANALYTICS_TABLE" ? "analytics-card" : ""} ${getJobStatusClass(job.jobStatus)}`;
@@ -262,7 +262,7 @@ window.renderRunningJobs = function(jobs) {
     const existingCards = new Map(); // Store existing cards by job ID
     
     // Store existing cards before clearing container
-    document.querySelectorAll('[data-job-id]').forEach(card => {
+    document.querySelectorAll("[data-job-id]").forEach(card => {
         existingCards.set(card.dataset.jobId, card);
     });
 
@@ -315,11 +315,11 @@ window.renderRunningJobs = function(jobs) {
                     card = job.jobType === "ANALYTICS_TABLE"
                         ? createAnalyticsTableCard(job)
                         : createDefaultCard(job);
-                    card.setAttribute('data-job-id', job.id);
+                    card.setAttribute("data-job-id", job.id);
                 }
 
                 // Update position label
-                let positionLabel = card.querySelector('.position-label');
+                let positionLabel = card.querySelector(".position-label");
                 if (!positionLabel) {
                     positionLabel = document.createElement("div");
                     positionLabel.className = "position-label";
@@ -351,7 +351,7 @@ window.renderRunningJobs = function(jobs) {
                 card = job.jobType === "ANALYTICS_TABLE"
                     ? createAnalyticsTableCard(job)
                     : createDefaultCard(job);
-                card.setAttribute('data-job-id', job.id);
+                card.setAttribute("data-job-id", job.id);
             }
             independentContainer.appendChild(card);
         });
@@ -471,18 +471,18 @@ window.showJobInfoModal = async function (jobType, jobId) {
     activeJobId = jobId;
     try {
         const tasks = await d2Get(`/api/system/tasks/${jobType}/${jobId}`);
-        let formattedContent = '';
+        let formattedContent = "";
 
         // Check for prediction summary in completed tasks
-        if (jobType === 'PREDICTOR') {
+        if (jobType === "PREDICTOR") {
             const completedTask = tasks.find(task => 
-                task.message && task.message.includes('PredictionSummary'));
+                task.message && task.message.includes("PredictionSummary"));
             
             if (completedTask) {
                 const summary = parsePredictionSummary(completedTask.message);
                 if (summary) {
                     formattedContent += formatPredictionSummary(summary);
-                    formattedContent += '<hr>'; // Add separator
+                    formattedContent += "<hr>"; // Add separator
                 }
             }
         }
@@ -494,7 +494,7 @@ window.showJobInfoModal = async function (jobType, jobId) {
             .map(task => `
                 <div><strong>${task.time}</strong>: ${task.message}</div>
             `)
-            .join('');
+            .join("");
 
         document.getElementById("jobInfoModalContent").innerHTML = 
             formattedContent || "No task details available";
@@ -511,13 +511,13 @@ function parsePredictionSummary(message) {
     if (!match) return null;
 
     const summaryContent = match[1];
-    const pairs = summaryContent.split(',').map(pair => pair.trim());
+    const pairs = summaryContent.split(",").map(pair => pair.trim());
     const summary = {};
 
     pairs.forEach(pair => {
-        const [key, value] = pair.split('=');
+        const [key, value] = pair.split("=");
         if (key && value) {
-            summary[key.trim()] = value.trim().replace(/'/g, '');
+            summary[key.trim()] = value.trim().replace(/'/g, "");
         }
     });
 
@@ -526,15 +526,15 @@ function parsePredictionSummary(message) {
 
 // Add function to format prediction summary as table
 function formatPredictionSummary(summary) {
-    if (!summary) return '';
+    if (!summary) return "";
 
     const rows = [
-        ['Status', summary.status],
-        ['Predictors', summary.predictors],
-        ['Inserted values', summary.inserted],
-        ['Updated values', summary.updated],
-        ['Deleted values', summary.deleted],
-        ['Unchanged values', summary.unchanged]
+        ["Status", summary.status],
+        ["Predictors", summary.predictors],
+        ["Inserted values", summary.inserted],
+        ["Updated values", summary.updated],
+        ["Deleted values", summary.deleted],
+        ["Unchanged values", summary.unchanged]
     ];
 
     return `
@@ -546,9 +546,9 @@ function formatPredictionSummary(summary) {
                 ${rows.map(([label, value]) => `
                     <tr>
                         <td>${label}</td>
-                        <td>${value || 'N/A'}</td>
+                        <td>${value || "N/A"}</td>
                     </tr>
-                `).join('')}
+                `).join("")}
             </tbody>
         </table>
     `;
