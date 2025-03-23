@@ -229,9 +229,11 @@ h5 {
 
 .progress-info {
     margin: 10px 0;
-    padding: 5px;
+    padding: 10px;
     background-color: #f5f5f5;
     border-radius: 4px;
     font-weight: bold;
-    min-height: 45px;
+    text-align: center;
+    border-left: 4px solid #2196F3;
+    min-height: 62px;
 }

@@ -27,18 +27,43 @@ window.onload = function () {
     });
 };
 
+// Add new function to check if a job is running based on its tasks
+function isJobRunning(jobType, jobId, taskMap) {
+    if (!taskMap || !taskMap[jobType] || !taskMap[jobType][jobId]) {
+        return false;
+    }
 
+    const tasks = taskMap[jobType][jobId];
+    const lastTask = tasks[0];
+    
+    if (!lastTask) return false;
+    
+    return !lastTask.completed && lastTask.level !== 'ERROR';
+}
+
+// Modify pollJobConfigurations to fetch both configurations and tasks
 function pollJobConfigurations() {
     setInterval(async () => {
         try {
-            const data = await d2Get("/api/jobConfigurations?fields=*");
+            const [configData, tasksData] = await Promise.all([
+                d2Get("/api/jobConfigurations?paging=false&fields=id,jobType,jobStatus,displayName,jobParameters," + 
+                      "lastExecuted,lastExecutedStatus,lastFinished,lastRuntimeExecution,nextExecutionTime," +
+                      "queueName,queuePosition"),
+                d2Get("/api/system/tasks")
+            ]);
             
-            window.renderRunningJobs(data.jobConfigurations);
-            window.updateJobLists(data.jobConfigurations); // Update the lists for last and upcoming jobs
+            // Enhance job configurations with task status
+            const enhancedJobs = configData.jobConfigurations.map(job => ({
+                ...job,
+                isRunning: job.jobStatus === 'RUNNING' || isJobRunning(job.jobType, job.id, tasksData)
+            }));
+
+            window.renderRunningJobs(enhancedJobs);
+            window.updateJobLists(enhancedJobs);
         } catch (error) {
-            console.error("Failed to fetch job configurations:", error);
+            console.error("Failed to fetch job data:", error);
         }
-    }, 5000); // Poll every 5 seconds
+    }, 5000);
 }
 
 function startModalPolling(jobType, jobId) {
@@ -63,7 +88,7 @@ function startModalPolling(jobType, jobId) {
     }, 5000); // Update interval based on requirements
 }
 
-// Update the extractProgressFromTask function to take the full tasks array
+// Update the extractProgressFromTask function to handle action message better
 function extractProgressFromTask(tasks) {
     const latestTask = tasks[0];
     if (latestTask?.level === 'LOOP') {
@@ -73,33 +98,54 @@ function extractProgressFromTask(tasks) {
             const total = parseInt(match[2]);
             const percentage = Math.round((current / total) * 100);
             
-            // Find the previous non-LOOP message to get the action description
+            // Find the first non-LOOP message for action description
             const actionTask = tasks.find(task => task.level !== 'LOOP');
             const action = actionTask ? actionTask.message : 'Processing';
             
-            return { percentage, action };
+            return { percentage, action, isLoop: true };
         }
     }
-    return null;
+    return { message: latestTask?.message, isLoop: false };
 }
 
-// Update the startTaskPolling function
 function startTaskPolling(jobType, jobId) {
     if (activeTaskPolls.has(jobId)) {
         return; // Already polling this job
     }
 
+    let lastMessage = '';
+    let lastAction = null;
+    let lastPercentage = null;
+    
     const pollInterval = setInterval(async () => {
         try {
             const tasks = await d2Get(`/api/system/tasks/${jobType}/${jobId}`);
-            const progress = extractProgressFromTask(tasks);
+            const result = extractProgressFromTask(tasks);
             
             const progressDiv = document.getElementById(`progress-${jobId}`);
             if (progressDiv) {
-                if (progress) {
-                    progressDiv.innerHTML = `<div>${progress.action}<br>${progress.percentage}% complete</div>`;
-                } else {
-                    progressDiv.innerHTML = "Processing...";
+                let newMessage = lastMessage; // Start with previous message
+                
+                if (result.isLoop) {
+                    // Update action if new one is available
+                    if (result.action) lastAction = result.action;
+                    
+                    // Only update if percentage changed or we have a new action
+                    if (result.percentage !== lastPercentage || !newMessage) {
+                        newMessage = `<div>${lastAction}<br>${result.percentage}% complete</div>`;
+                        lastPercentage = result.percentage;
+                    }
+                } else if (tasks[0]?.level === 'INFO') {
+                    // Store new action message
+                    lastAction = result.message;
+                    newMessage = `<div>${result.message}</div>`;
+                    lastPercentage = null;
+                }
+
+                // Only update DOM if message content actually changed
+                if (newMessage !== lastMessage) {
+                    progressDiv.innerHTML = newMessage;
+                    lastMessage = newMessage;
                 }
             }
         } catch (error) {
@@ -110,6 +156,51 @@ function startTaskPolling(jobType, jobId) {
     activeTaskPolls.set(jobId, pollInterval);
 }
 
+// Modify createAnalyticsTableCard and createDefaultCard to show empty progress div initially
+function createAnalyticsTableCard(job) {
+    const titleRegex = /^ANALYTICS_TABLE \(\d+\)$/;
+    const displayName = titleRegex.test(job.displayName) ? "Analytics table (manual run)" : job.displayName;
+    const years = job.jobParameters.years || "All";
+    const status = job.jobStatus || "Unknown";
+
+    const card = document.createElement("div");
+    card.className = "card analytics-card"; 
+    card.innerHTML = `
+        <div class="card-title">${displayName}</div>
+        <div>Status: ${status}</div>
+        <div>ID: ${job.id}</div>
+        <div>Years: ${years}</div>
+        ${renderAnalyticsParametersTable(job.jobParameters)}
+        <div id="progress-${job.id}" class="progress-info"></div>
+        <div class="card-footer">
+            <button class="btn modal-trigger" data-target="jobInfoModal" onclick="showJobInfoModal('${job.jobType}', '${job.id}')">View Details</button>
+        </div>
+    `;
+    return card;
+}
+
+function createDefaultCard(job) {
+    const formattedParameters = formatJobParameters(job.jobParameters);
+    const status = job.jobStatus || "Unknown";
+
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `
+        <div class="card-title">${job.displayName}</div>
+        <div>Status: ${status}</div>
+        <div>Job Type: ${job.jobType}</div>
+        <div>Last Executed: ${job.lastExecuted || "N/A"}</div>
+        <div>Last Runtime: ${job.lastRuntimeExecution || "N/A"}</div>
+        ${formattedParameters}
+        <div id="progress-${job.id}" class="progress-info"></div>
+        <div class="card-footer">
+            <button class="btn modal-trigger" data-target="jobInfoModal" onclick="showJobInfoModal('${job.jobType}', '${job.id}')">View Details</button>
+        </div>
+    `;
+    return card;
+}
+
+// Modify renderRunningJobs to use isRunning property
 window.renderRunningJobs = function(jobs) {
     const container = document.getElementById("runningJobsContainer");
     container.innerHTML = ""; // Clear previous entries
@@ -117,7 +208,7 @@ window.renderRunningJobs = function(jobs) {
     // 1. Find all queues that have at least one running job
     const activeQueues = new Set(
         jobs
-            .filter(job => job.jobStatus === "RUNNING" && job.jobType !== "HOUSEKEEPING" && job.queueName)
+            .filter(job => job.isRunning && job.jobType !== "HOUSEKEEPING" && job.queueName)
             .map(job => job.queueName)
     );
 
@@ -135,7 +226,7 @@ window.renderRunningJobs = function(jobs) {
     // Handle independent running jobs separately
     const independentJobs = jobs.filter(job => 
         !job.queueName && 
-        job.jobStatus === "RUNNING" && 
+        job.isRunning && 
         job.jobType !== "HOUSEKEEPING"
     );
 
@@ -199,7 +290,7 @@ window.renderRunningJobs = function(jobs) {
 
     // Clear existing polls for jobs that are no longer running
     for (const [jobId, interval] of activeTaskPolls.entries()) {
-        if (!jobs.some(job => job.id === jobId && job.jobStatus === "RUNNING")) {
+        if (!jobs.some(job => job.id === jobId && job.isRunning)) {
             clearInterval(interval);
             activeTaskPolls.delete(jobId);
         }
@@ -207,7 +298,7 @@ window.renderRunningJobs = function(jobs) {
 
     // Start polling for running jobs
     jobs.forEach(job => {
-        if (job.jobStatus === "RUNNING") {
+        if (job.isRunning) {
             startTaskPolling(job.jobType, job.id);
         }
     });
@@ -228,11 +319,12 @@ function getJobStatusClass(status) {
     }
 }
 
+// Modify updateJobLists to use isRunning
 window.updateJobLists = function (jobs) {
     jobs = jobs.filter(job => job.jobType !== "HOUSEKEEPING");
 
     // Filter out any running jobs
-    const nonRunningJobs = jobs.filter(job => job.jobStatus !== "RUNNING");
+    const nonRunningJobs = jobs.filter(job => !job.isRunning);
 
     const completedJobs = nonRunningJobs
         .filter(job => job.lastExecutedStatus)
@@ -242,7 +334,7 @@ window.updateJobLists = function (jobs) {
     const upcomingJobs = nonRunningJobs
         .filter(job => job.jobStatus === "SCHEDULED" && job.nextExecutionTime)
         .sort((a, b) => new Date(a.nextExecutionTime) - new Date(b.nextExecutionTime))
-        .slice(0, 6);
+        .slice(0, 10);
 
     renderJobList("lastJobsContainer", "Last Jobs", completedJobs, "lastFinished", "lastExecutedStatus", formatLastJobDetails);
     renderJobList("upcomingJobsContainer", "Upcoming Jobs", upcomingJobs, "nextExecutionTime", null, formatUpcomingJobDetails);
@@ -318,49 +410,6 @@ window.showJobInfoModal = async function (jobType, jobId) {
 };
 
 
-
-function createAnalyticsTableCard(job) {
-    const titleRegex = /^ANALYTICS_TABLE \(\d+\)$/;
-    const displayName = titleRegex.test(job.displayName) ? "Analytics table (manual run)" : job.displayName;
-    const years = job.jobParameters.years || "All";
-    const status = job.jobStatus || "Unknown";
-
-    const card = document.createElement("div");
-    card.className = "card analytics-card"; 
-    card.innerHTML = `
-        <div class="card-title">${displayName}</div>
-        <div>Status: ${status}</div>
-        <div>ID: ${job.id}</div>
-        <div>Years: ${years}</div>
-        ${renderAnalyticsParametersTable(job.jobParameters)}
-        <div id="progress-${job.id}" class="progress-info">Processing...</div>
-        <div class="card-footer">
-            <button class="btn modal-trigger" data-target="jobInfoModal" onclick="showJobInfoModal('${job.jobType}', '${job.id}')">View Details</button>
-        </div>
-    `;
-    return card;
-}
-
-function createDefaultCard(job) {
-    const formattedParameters = formatJobParameters(job.jobParameters);
-    const status = job.jobStatus || "Unknown";
-
-    const card = document.createElement("div");
-    card.className = "card";
-    card.innerHTML = `
-        <div class="card-title">${job.displayName}</div>
-        <div>Status: ${status}</div>
-        <div>Job Type: ${job.jobType}</div>
-        <div>Last Executed: ${job.lastExecuted || "N/A"}</div>
-        <div>Last Runtime: ${job.lastRuntimeExecution || "N/A"}</div>
-        ${formattedParameters}
-        <div id="progress-${job.id}" class="progress-info">Processing...</div>
-        <div class="card-footer">
-            <button class="btn modal-trigger" data-target="jobInfoModal" onclick="showJobInfoModal('${job.jobType}', '${job.id}')">View Details</button>
-        </div>
-    `;
-    return card;
-}
 
 function renderAnalyticsParametersTable(params = {}) {
     const skipTables = Array.isArray(params.skipTableTypes)
