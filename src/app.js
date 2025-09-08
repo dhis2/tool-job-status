@@ -1,6 +1,8 @@
 "use strict";
 
 import { d2Get } from "./js/d2api.js";
+import { loadLegacyHeaderBarIfNeeded } from "./js/check-header-bar.js";
+
 import $ from "jquery";
 import "materialize-css";
 import "./css/style.css";
@@ -179,7 +181,7 @@ function startTaskPolling(jobType, jobId) {
                     lastPercentage = null;
                 } else {
                     // If there is no message at all, show "Running"
-                    newMessage = `<div>Running</div>`;
+                    newMessage = "<div>Running</div>";
                 }
 
                 // Only update DOM if the message changed
@@ -624,3 +626,5 @@ function formatJobParameters(params) {
 
     return formattedParams;
 }
+
+loadLegacyHeaderBarIfNeeded();
