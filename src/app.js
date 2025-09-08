@@ -1,6 +1,8 @@
 "use strict";
 
 import { d2Get } from "./js/d2api.js";
+import { loadLegacyHeaderBarIfNeeded } from "./js/check-header-bar.js";
+
 import $ from "jquery";
 import "materialize-css";
 import "./css/style.css";
@@ -162,28 +164,28 @@ function startTaskPolling(jobType, jobId) {
             const progressDiv = document.getElementById(`progress-${jobId}`);
             if (progressDiv) {
                 let newMessage = lastMessage;
-                
+
                 if (result.isLoop) {
-                    // Only update action if it's defined
                     if (result.action && result.action.trim()) {
                         lastAction = result.action;
                     }
-                    
                     if (result.percentage !== lastPercentage || !newMessage) {
-                        newMessage = lastAction ? 
-                            `<div>${lastAction}<br>${result.percentage}% complete</div>` : 
+                        newMessage = lastAction ?
+                            `<div>${lastAction}<br>${result.percentage}% complete</div>` :
                             `<div>${result.percentage}% complete</div>`;
                         lastPercentage = result.percentage;
                     }
                 } else if (tasks[0]?.level === "INFO" && tasks[0]?.message) {
-                    // Only store/show non-empty messages
                     lastAction = tasks[0].message.trim();
                     newMessage = `<div>${lastAction}</div>`;
                     lastPercentage = null;
+                } else {
+                    // If there is no message at all, show "Running"
+                    newMessage = "<div>Running</div>";
                 }
 
-                // Only update DOM if we have a valid message that changed
-                if (newMessage && newMessage !== lastMessage) {
+                // Only update DOM if the message changed
+                if (newMessage !== lastMessage) {
                     progressDiv.innerHTML = newMessage;
                     lastMessage = newMessage;
                 }
@@ -624,3 +626,5 @@ function formatJobParameters(params) {
 
     return formattedParams;
 }
+
+loadLegacyHeaderBarIfNeeded();
